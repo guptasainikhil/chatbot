@@ -2,9 +2,17 @@ import streamlit as st
 import replicate
 import os
 
+if 'messages' not in st.session_state:
+    st.session_state.messages = [{"role": "assistant", "content": "Welcome to the DMV chatbot. How may I assist you today?"}]
+
 # App title
 st.set_page_config(page_title="🚗 DMV Llama 2 Chatbot")
+st.title('🚗 DMV Llama 2 Chatbot')
 
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
 # Replicate Credentials
 with st.sidebar:
     st.title('🚗 DMV Llama 2 Chatbot')
