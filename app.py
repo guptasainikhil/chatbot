@@ -1,72 +1,59 @@
 import streamlit as st
-from PyPDF2 import PdfReader
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.vectorstores import FAISS
+import replicate
 import os
 
-# Streamlit app title and description
-st.title("DMV Chat Assistant")
-st.write("Ask questions about DMV services, rules, and procedures.")
+# Set up the Streamlit page
+st.set_page_config(page_title="DMV Chatbot with LLaMA-2")
 
-# Define the path to the DMV PDF file
-default_pdf_path = 'dmv.pdf'  # Replace with the path to your DMV PDF file
+# Sidebar for Replicate Credentials and model parameters
+with st.sidebar:
+    st.title('DMV Chatbot Configuration')
+    st.write('This DMV chatbot is powered by the LLaMA-2 model from Meta.')
 
-# Input for the OpenAI API key
-openai_api_key = st.text_input("Enter your OpenAI API Key", type='password')
-
-def extract_text_from_pdf(pdf_file):
-    try:
-        pdf_reader = PdfReader(pdf_file)
-        text = ''
-        for page in pdf_reader.pages:
-            page_text = page.extract_text() or ''
-            text += page_text
-        return text
-    except Exception as e:
-        st.error(f"Error extracting text from PDF: {str(e)}")
-        return None
-
-def chat_with_pdf(text, openai_key, query):
-    try:
-        os.environ['OPENAI_API_KEY'] = openai_key
-        text_splitter = CharacterTextSplitter(
-            separator="\n",
-            chunk_size=800,
-            chunk_overlap=200,
-            length_function=len,
-        )
-        texts = text_splitter.split_text(text)
-        embeddings = OpenAIEmbeddings()
-        document_search = FAISS.from_texts(texts, embeddings)
-        from langchain.chains.question_answering import load_qa_chain
-        from langchain.llms import OpenAI
-        chain = load_qa_chain(OpenAI(), chain_type="contextual_qa")
-        docs = document_search.similarity_search(query, k=5)  # Adjust 'k' as needed
-        result = chain.run(input_documents=docs, question=query)
-        return result
-    except Exception as e:
-        st.error(f"Error processing the query: {str(e)}")
-        return None
-
-# User input for questions
-user_question = st.text_input("Ask a DMV-related question")
-
-# Process the user question on button click
-if st.button("Ask DMV Assistant"):
-    if openai_api_key and user_question:
-        pdf_text = extract_text_from_pdf(default_pdf_path)
-        if pdf_text:
-            result = chat_with_pdf(pdf_text, openai_api_key, user_question)
-            if result:
-                st.write("Answer:", result)
-            else:
-                st.warning("No answer found for the given question.")
-        else:
-            st.warning("Unable to extract text from the PDF. Please check the file path.")
+    # API Token Input
+    if 'REPLICATE_API_TOKEN' in st.secrets:
+        replicate_api = st.secrets['REPLICATE_API_TOKEN']
+        st.success('API key loaded from secrets.', icon='✅')
     else:
-        st.warning("Please provide an OpenAI API Key and enter a question.")
+        replicate_api = st.text_input('Enter Replicate API token:', type='password')
+        if replicate_api:
+            os.environ['REPLICATE_API_TOKEN'] = replicate_api
+            st.success('API token set.', icon='🔑')
+        else:
+            st.warning('Please enter a valid Replicate API token.')
 
-if __name__ == "__main__":
-    st.set_option('deprecation.showfileUploaderEncoding', False)
+    # Model selection and parameters
+    st.subheader('Model and Parameters')
+    selected_model = st.selectbox('Choose a LLaMA-2 model', ['Llama2-7B', 'Llama2-13B'])
+    temperature = st.slider('Temperature', 0.0, 1.0, 0.7)
+    top_p = st.slider('Top P', 0.0, 1.0, 0.9)
+    max_length = st.slider('Max Length', 50, 500, 150)
 
+# Store and display chat messages
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+
+st.title('DMV Chatbot with LLaMA-2')
+
+# Function to clear chat history
+def clear_history():
+    st.session_state.messages = []
+
+# Button to clear chat history
+st.sidebar.button('Clear Chat History', on_click=clear_history)
+
+# Chat interface
+user_input = st.text_input('Ask a DMV-related question:')
+
+if user_input:
+    st.session_state.messages.append({'role': 'user', 'content': user_input})
+    # Add the code to call the LLaMA-2 model here
+    # For example, use replicate.run() to get the model's response
+    # Append the model's response to st.session_state.messages
+
+# Display chat history
+for message in st.session_state.messages:
+    role = message['role']
+    content = message['content']
+    with st.expander(f"{role.capitalize()} says:", expanded=True):
+        st.write(content)
